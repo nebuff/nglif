@@ -60,6 +60,9 @@ pub struct Editor {
 
     pub(crate) filesystem_watch_tx: Sender<path::PathBuf>,
     pub(crate) filesystem_watch_rx: Receiver<path::PathBuf>,
+    /// Modification time of the glyph file as we last read or acknowledged it, so that
+    /// filesystem events which only touched its metadata don't count as a rewrite.
+    pub(crate) watched_mtime: Option<std::time::SystemTime>,
 
     preview_dirty: bool,
     pub preview: Option<MFEKGlif<MFEKPointData>>,
@@ -109,6 +112,7 @@ impl Editor {
 
             filesystem_watch_tx: fstx,
             filesystem_watch_rx: fsrx,
+            watched_mtime: None,
         };
         self_o.headless();
         self_o

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template for nglif.app/Contents/Info.plist. util/macos/build-app.sh fills in @VERSION@
+     from Cargo.toml. -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>nglif</string>
+	<key>CFBundleIconFile</key>
+	<string>nglif</string>
+	<key>CFBundleIdentifier</key>
+	<string>xyz.nebuff.nglif</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>nglif</string>
+	<key>CFBundleDisplayName</key>
+	<string>nglif</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright 2020-2021 Fredrick R. Brennan, Matthew Blanchard &amp; MFEK Authors. nglif by Nebuff. Apache License 2.0.</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.graphics-design</string>
+
+	<!-- One universal binary: Intel Macs from macOS 10.15, Apple silicon from macOS 11. -->
+	<key>LSMinimumSystemVersion</key>
+	<string>10.15</string>
+	<key>LSMinimumSystemVersionByArchitecture</key>
+	<dict>
+		<key>arm64</key>
+		<string>11.0</string>
+		<key>x86_64</key>
+		<string>10.15</string>
+	</dict>
+	<key>LSArchitecturePriority</key>
+	<array>
+		<string>arm64</string>
+		<string>x86_64</string>
+	</array>
+
+	<!-- Draw at full Retina resolution; SDL only gets a HiDPI drawable when this is set. -->
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<!-- SDL's OpenGL context allows offline renderers, so dual-GPU Intel MacBook Pros can
+	     stay on the integrated GPU instead of waking the discrete one. -->
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+
+	<!-- Lets Finder open .glif and .glifjson files in nglif (double-click, Open With, or a
+	     drop on the Dock icon). The MIME types match doc/linux-mimetypes. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>UFO Glyph</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.unifiedfontobject.glif</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>MFEK Glyph</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.mfek.glifjson</string>
+			</array>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>org.unifiedfontobject.glif</string>
+			<key>UTTypeDescription</key>
+			<string>UFO Glyph</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>glif</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>text/vnd.ufo.glif</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>org.mfek.glifjson</string>
+			<key>UTTypeDescription</key>
+			<string>MFEK Glyph</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>glifjson</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>text/vnd.mfek.glifjson</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

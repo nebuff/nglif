@@ -56,7 +56,7 @@ pub fn parse_args() -> Args {
                 .takes_value(false)
                 .help(r#"For either the save or the export operation, remove all contour operations, don't apply them."#)
         )
-        .get_matches();
+        .get_matches_from(std::env::args_os().filter(|arg| !is_macos_psn_arg(arg)));
 
     let headless_mode = if matches.is_present("export") {
         HeadlessMode::Export
@@ -77,4 +77,10 @@ pub fn parse_args() -> Args {
     };
 
     args
+}
+
+/// Older macOS versions start a bundled app from Finder with a `-psn_0_123456` (process serial
+/// number) argument, which clap would reject as an unknown flag, so the app would quit at launch.
+fn is_macos_psn_arg(arg: &std::ffi::OsStr) -> bool {
+    cfg!(target_os = "macos") && arg.to_string_lossy().starts_with("-psn_")
 }

@@ -60,6 +60,43 @@ impl Editor {
         );
     }
 
+    /// Opens a glyph the system handed us instead of one picked in our own Open dialog: a file
+    /// dropped on the window, or (on macOS) dropped on the Dock icon or opened from Finder.
+    /// Asks before discarding unsaved changes, since a drop is easier to make by accident.
+    pub fn open_dropped_glif(&mut self, i: &mut Interface, path: PathBuf) {
+        let is_glyph = path
+            .extension()
+            .map(|e| e.eq_ignore_ascii_case("glif") || e.eq_ignore_ascii_case("glifjson"))
+            .unwrap_or(false);
+        if !is_glyph || !path.is_file() {
+            log::warn!(
+                "Not opening {:?}: nglif opens .glif and .glifjson files",
+                &path
+            );
+            return;
+        }
+        if !self.has_unsaved_changes() {
+            self.load_glif(i, &path);
+            return;
+        }
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        i.push_prompt(InputPrompt::YesNo {
+            question: format!("Unsaved changes exist in glyph. Open {} anyway?", name),
+            afterword: "Any changes made will be lost.".to_string(),
+            func: Rc::new(move |v: &mut Editor, i: &mut Interface, open: bool| {
+                if open {
+                    log::warn!("Opening {:?}, discarding unsaved changes", &path);
+                    v.load_glif(i, &path);
+                } else {
+                    log::info!("Kept the current glyph instead of opening {:?}", &path);
+                }
+            }),
+        });
+    }
+
     pub fn load_glif_impl<F: AsRef<Path> + Clone>(&mut self, file: F) {
         // TODO: Actually handle errors now that we have them.
         let glif: MFEKGlif<_> = {
@@ -90,6 +127,7 @@ impl Editor {
 
             tempglif
         };
+        self.watched_mtime = fs::metadata(&file).and_then(|m| m.modified()).ok();
 
         if *DEBUG_DUMP_GLYPH {
             log::debug!("{:#?}", &glif);

@@ -2,6 +2,7 @@ use super::{events::*, Editor};
 use crate::user_interface::{InputPrompt, Interface};
 
 use std::ffi::OsStr;
+use std::fs;
 use std::rc::Rc;
 use std::sync::mpsc::TryRecvError;
 
@@ -32,6 +33,19 @@ impl Editor {
                     {
                         let filename = self.filename_or_panic();
                         if filename.file_name().unwrap() == p.file_name().unwrap() {
+                            // Opening a document from Finder makes macOS tag it with a
+                            // `com.apple.lastuseddate#PS` extended attribute, and watchers report
+                            // that (like a chmod) as a change, often several times over. Only a
+                            // new modification time means the glyph itself was rewritten.
+                            let modified = fs::metadata(&filename).and_then(|m| m.modified()).ok();
+                            if modified.is_some() && modified == self.watched_mtime {
+                                log::debug!(
+                                    "Ignored a metadata-only change to {:?}",
+                                    p.file_name().unwrap()
+                                );
+                                continue 'filesystem_watch;
+                            }
+                            self.watched_mtime = modified;
                             if !self.just_saved() {
                                 i.push_prompt(InputPrompt::YesNo {
                                     question: "Another program/nglif instance rewrote the current \nglyph. Reload? Any changes made will be lost.\n ".to_string(),

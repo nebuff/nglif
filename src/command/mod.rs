@@ -192,6 +192,23 @@ fn command_mod_test() {
     );
 }
 
+#[test]
+fn primary_modifier_is_command_on_macos() {
+    let cmd: HashSet<Keycode> = [Keycode::LGui].into_iter().collect();
+    let control: HashSet<Keycode> = [Keycode::RCtrl, Keycode::LShift].into_iter().collect();
+    let (with_cmd, with_control) = (
+        CommandMod::from_keys_down(&cmd),
+        CommandMod::from_keys_down(&control),
+    );
+    if cfg!(target_os = "macos") {
+        assert!(with_cmd.ctrl && !with_cmd.meta);
+        assert!(with_control.meta && with_control.shift && !with_control.ctrl);
+    } else {
+        assert!(with_cmd.meta && !with_cmd.ctrl);
+        assert!(with_control.ctrl && with_control.shift && !with_control.meta);
+    }
+}
+
 pub struct CommandInfo {
     pub command: Command,
     pub command_mod: CommandMod,
@@ -313,11 +330,21 @@ pub fn initialize_keybinds() {
 
 impl CommandMod {
     pub fn from_keys_down(keys_down: &HashSet<Keycode>) -> CommandMod {
+        let control = keys_down.contains(&Keycode::LCtrl) || keys_down.contains(&Keycode::RCtrl);
+        let gui = keys_down.contains(&Keycode::LGui) || keys_down.contains(&Keycode::RGui);
+        // Keymaps say `Ctrl` for the platform's main shortcut modifier, which on a Mac is
+        // Command (⌘). Swap the two there, as Qt does, so ⌘S saves, ⌘Z undoes and ⌘-drag does
+        // what Ctrl-drag does elsewhere; the Mac's Control key takes the `Meta` role instead.
+        let (ctrl, meta) = if cfg!(target_os = "macos") {
+            (gui, control)
+        } else {
+            (control, gui)
+        };
         CommandMod {
-            ctrl: keys_down.contains(&Keycode::LCtrl) || keys_down.contains(&Keycode::RCtrl),
+            ctrl,
             shift: keys_down.contains(&Keycode::LShift) || keys_down.contains(&Keycode::RShift),
             alt: keys_down.contains(&Keycode::LAlt) || keys_down.contains(&Keycode::RAlt),
-            meta: keys_down.contains(&Keycode::LGui) || keys_down.contains(&Keycode::RGui),
+            meta,
         }
     }
 }

@@ -145,13 +145,20 @@ backtrace = "0.3"
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
 
+# macOS ships no SDL2, and Homebrew's `sdl2` formula is now sdl2-compat, a shim over SDL3, so a
+# binary linked against it only runs on Macs that have Homebrew. Build SDL2 from source and link it
+# statically instead: plain `cargo build` then gives a self-contained binary that runs on any Mac,
+# which is what the README always promised ("statically links to SDL2 if not on Linux"); the
+# `sdl2-static` feature only took effect when it was passed by hand.
+[target.'cfg(target_os = "macos")'.dependencies]
+sdl2 = { version = ">=0.34", features = ["raw-window-handle", "bundled", "static-link"] }
+
 [build-dependencies]
 cargo-emit = "0.2"
 cfg-if = "1.0"
 chrono = "=0.4.31"
 colored = "2.0"
 log = "0.4"
-which = "4.2"
 
 [features]
 default = []

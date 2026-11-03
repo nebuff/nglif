@@ -17,6 +17,10 @@ Every distribution's package is built inside that distribution, so it links its
 own GTK 3, SDL2 and glibc and updates with the system. Versions, sizes,
 checksums and the signing key: <https://repo.nebuff.xyz/nglif/>.
 
+On a Mac, nglif is an ordinary app: one download runs natively on both Apple
+silicon and Intel Macs (macOS 10.15 or later), and Finder opens `.glif` and
+`.glifjson` files in it. See [§ Mac users](#mac-users) to build it yourself.
+
 ![](doc/screenshot_main.png)
 
 <img src="https://raw.githubusercontent.com/MFEK/glif/master/doc/screenshot.png" width="300"><img src="https://raw.githubusercontent.com/MFEK/glif/master/doc/screenshot2.png" width="300">
@@ -59,7 +63,9 @@ To make this as easy as possible to build, and cross-platform without hassle, re
 
 ## Keys
 
-Note: This is a basic list to get you started. A complete list can be found in `resources/default_keymap.xml`. You may copy this file to e.g. `$HOME/.config/MFEK/glif/keybindings.xml` on Linux and modify it.
+Note: This is a basic list to get you started. A complete list can be found in `resources/default_keymap.xml`. You may copy this file to e.g. `$HOME/.config/MFEK/glif/keybindings.xml` on Linux, or `~/Library/Application Support/MFEK/glif/keybindings.xml` on macOS, and modify it.
+
+On macOS, <kbd>⌘</kbd> Command does everything this list (and the keymap file) calls <kbd>Ctrl</kbd>: <kbd>⌘</kbd><kbd>S</kbd> saves, <kbd>⌘</kbd><kbd>Z</kbd> undoes, <kbd>⌘</kbd>-drag rotates a selection. <kbd>Ctrl</kbd>-click is a right click there, as in every other Mac app.
 
 ### I/O
 <sup><sub>For more information, see § “I/O Help”.</sub></sup>
@@ -99,9 +105,33 @@ extracts to a plain `usr/` tree.
 
 ### Mac users
 
-Apple charges a fee to "notarize" applications and without this "notarization" MFEKglif will not run correctly, or in some cases, at all. So, for the foreseeable future, you must _build MFEKglif from source on OS X_. This is not as hard as it sounds! :-)
+You need the Xcode command line tools (`xcode-select --install`), [`rustup`](https://rustup.rs/)
+and CMake (`brew install cmake`, or from [cmake.org](https://cmake.org/download/)). Then:
 
-* Download and install the [Vulkan SDK](https://vulkan.lunarg.com/).
+```sh
+make macos-app        # or: util/macos/build-app.sh
+make macos-dmg        # ... plus a disk image to share it
+```
+
+That builds `target/macos/nglif.app`: one universal binary (Apple silicon from
+macOS 11, Intel from macOS 10.15) with SDL2 and Skia linked in, so it runs on
+any Mac without Homebrew. The script also checks what it built: the binary links
+nothing but macOS itself, and both architectures open, save and flatten a glyph
+to identical files (on Apple silicon the Intel half runs under Rosetta 2). Add
+`--arch arm64` for a quicker single-architecture build while developing; for a
+quick run, `cargo run -- examples/Q_.glif` works as on Linux.
+
+The app is signed ad hoc, not notarized, so the first time a downloaded copy is
+opened macOS refuses it. Right-click it and choose **Open** (macOS 14 and
+earlier), or click **Open Anyway** under System Settings › Privacy & Security
+(macOS 15 and later); or run `xattr -dr com.apple.quarantine /Applications/nglif.app`
+once. Copies you build yourself are not affected. To sign with a Developer ID
+instead, set `CODESIGN_IDENTITY` when running the script; the app is then ready
+for `xcrun notarytool submit`.
+
+Every push is built and tested on Apple silicon and Intel Macs by
+`.github/workflows/macos.yml`, which also opens a glyph on a virtual Retina
+display and keeps screenshots of it.
 
 ### Linux users
 
@@ -141,13 +171,9 @@ By default, MFEKglif compiles and statically links to SDL2 if not on Linux. If y
 
 #### Mac users
 
-Mac users can install SDL2 via Homebrew if the automatic static linking of system SDL2 is not working well:
-
-```
-brew install sdl2
-```
-
-(It was found to have issues as recently as August 21, 2022; see [№&nbsp;321](https://github.com/MFEK/glif/issues/321).)
+On macOS, SDL2 is always built from source and linked statically, whatever the
+features: Homebrew's `sdl2` is now sdl2-compat, a shim over SDL3, and a binary
+linked against it would only run on Macs with Homebrew.
 
 ### Errors?
 

@@ -1,6 +1,8 @@
 pub mod egui_manager;
 pub mod follow;
 pub mod gui;
+#[cfg(target_os = "macos")]
+mod macos;
 pub mod mouse_input;
 pub mod popout;
 pub mod sdl;
@@ -25,7 +27,7 @@ use crate::editor::Editor;
 pub use crate::render::measure::Measure;
 pub use crate::user_interface::mouse_input::MouseInfo;
 
-use sdl2::{video::Window as SdlWindow, Sdl};
+use sdl2::{video::Window as SdlWindow, Sdl, VideoSubsystem};
 
 use self::egui_manager::EguiManager;
 use self::gui::build_ui;
@@ -71,10 +73,11 @@ fn fb_info() -> FramebufferInfo {
 }
 
 impl Interface {
-    pub fn new(filename: &str) -> Self {
+    pub fn new(sdl: Sdl, video_subsystem: VideoSubsystem, filename: &str) -> Self {
         let mut viewport = Viewport::default();
 
-        let (sdl, window, gr_context, gl_ctx) = Self::initialize_sdl(filename, &mut viewport);
+        let (window, gr_context, gl_ctx) =
+            Self::initialize_window(video_subsystem, filename, &mut viewport);
 
         let fb_info = fb_info();
 
@@ -103,6 +106,11 @@ impl Interface {
             child_sdl_windows: vec![],
         };
 
+        // The window was created 800×800 in points, but the canvas is in pixels: twice that on
+        // a Retina display. Measure it now rather than at the first resize, or the glyph starts
+        // out drawn around the top-left quarter of the window.
+        iself.refresh_window_metrics();
+
         iself
     }
 
@@ -110,10 +118,22 @@ impl Interface {
         create_surface(&self.sdl_window, &self.fb_info, &mut self.gr_context)
     }
 
-    pub fn adjust_viewport_by_os_dpi(&mut self) {
-        let dpi = self.os_dpi();
-        self.viewport.winsize.0 /= dpi;
-        self.viewport.winsize.1 /= dpi;
+    /// Re-reads the window's pixel density and its size in pixels. Call it whenever SDL reports
+    /// a resize; on macOS that includes moving the window to a display with another scale
+    /// factor (Retina laptop screen ↔ standard external monitor).
+    pub fn refresh_window_metrics(&mut self) {
+        let dpi = self.set_dpi_from_os();
+        let (width, height) = self.sdl_window.drawable_size();
+        self.viewport.winsize = (width as f32, height as f32);
+        let (w, h) = self.sdl_window.size();
+        log::debug!(
+            "Window is {}×{} points, drawn at {}×{} pixels ({} px/pt)",
+            w,
+            h,
+            width,
+            height,
+            1. / dpi
+        );
     }
 
     pub fn active_prompts(&self) -> bool {
@@ -164,10 +184,23 @@ impl Interface {
         self.viewport.offset = (now_offset.0 + offset.0, now_offset.1 + offset.1);
     }
 
+    /// Points per pixel: 1 on most screens, 0.5 on a Retina display. SDL sizes windows in points
+    /// and drawables in pixels, so ask it for both, every time; deriving this from
+    /// `viewport.winsize` went stale as soon as winsize was converted to pixels or the window
+    /// changed displays.
     fn set_dpi_from_os(&mut self) -> f32 {
-        let (w, h) = self.sdl_window.drawable_size();
-        let hdpi = self.viewport.winsize.0 / w as f32;
-        let vdpi = self.viewport.winsize.1 / h as f32;
+        let (ww, wh) = self.sdl_window.size();
+        let (dw, dh) = self.sdl_window.drawable_size();
+        if dw == 0 || dh == 0 {
+            // No drawable yet (or a minimized window on some systems): keep what we had.
+            return if self.sdl_dpi.is_nan() {
+                1.
+            } else {
+                self.sdl_dpi
+            };
+        }
+        let hdpi = ww as f32 / dw as f32;
+        let vdpi = wh as f32 / dh as f32;
         if hdpi != vdpi {
             log::warn!("Warning: DPI's not equal? {} != {}", hdpi, vdpi);
         }

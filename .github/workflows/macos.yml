@@ -1,0 +1,90 @@
+# Builds the macOS app (one universal binary for Apple silicon and Intel), then installs it from
+# the .dmg on both kinds of Mac and opens a glyph in it, at 1x and on a virtual Retina display.
+# The .dmg and the screenshots are kept as artifacts of each run; on a v* tag the .dmg is also
+# attached to that tag's GitHub release, if one exists.
+name: macOS
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Build nglif.app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}
+      - name: Build, check and package
+        run: util/macos/build-app.sh --dmg
+      - name: Unit tests
+        run: cargo test --release --locked --target aarch64-apple-darwin
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nglif-macos
+          path: target/macos/*.dmg
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke test (${{ matrix.name }})
+    needs: app
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple silicon
+            runner: macos-15
+          - name: Intel
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: nglif-macos
+          path: dist
+      - name: Install from the .dmg, open a glyph, screenshot it
+        run: util/macos/ci-smoke.sh dist/*.dmg
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: smoke-${{ matrix.runner }}
+          path: |
+            smoke/*.png
+            smoke/*.log
+          if-no-files-found: ignore
+
+  release:
+    name: Attach to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [app, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: nglif-macos
+          path: dist
+      - name: Upload the .dmg to this tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.dmg --clobber -R "$GITHUB_REPOSITORY"
+          else
+            echo "No GitHub release named $GITHUB_REF_NAME; the .dmg is in this run's artifacts."
+          fi

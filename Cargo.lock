@@ -2047,7 +2047,6 @@ dependencies = [
  "spline 0.3.0",
  "strum 0.24.1",
  "strum_macros 0.24.3",
- "which",
  "winapi",
  "xmltree",
 ]

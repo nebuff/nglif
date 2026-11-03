@@ -23,7 +23,7 @@ use crate::user_interface::Interface;
 use enum_iterator::IntoEnumIterator as _;
 use glifrenderer::toggles::{PointLabels, PreviewMode};
 use sdl2::event::{Event, WindowEvent};
-use sdl2::mouse::MouseButton;
+use sdl2::mouse::{MouseButton, MouseWheelDirection};
 use tool_behaviors::pan::PanBehavior;
 use user_interface::egui_manager::EguiManager;
 use user_interface::gui::window::WindowManager;
@@ -34,6 +34,7 @@ extern crate lazy_static;
 extern crate pub_mod;
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 
 pub mod args;
 mod command;
@@ -56,11 +57,24 @@ fn main() {
     util::set_panic_hook();
 
     let args = args::parse_args();
-    let filename = args.filename.clone();
+    let filename = args.filename.clone().map(PathBuf::from);
     let mut editor = Editor::new(args);
 
-    let filename = filedialog::filename_or_panic(&filename, Some("glif"), None);
-    let mut interface = Interface::new(filename.to_str().unwrap());
+    // On macOS, start SDL before deciding what to open: a document opened from Finder only
+    // arrives once Cocoa is up. Elsewhere the file dialog still runs first, as it always has.
+    #[cfg(target_os = "macos")]
+    let (sdl, filename) = {
+        let sdl = Interface::init_sdl();
+        let filename = filename.or_else(|| Interface::take_launch_document(&sdl.0));
+        (sdl, filename)
+    };
+    let filename = match filename {
+        Some(filename) => filename,
+        None => filedialog::filename_or_panic(&None, Some("glif"), None),
+    };
+    #[cfg(not(target_os = "macos"))]
+    let sdl = Interface::init_sdl();
+    let mut interface = Interface::new(sdl.0, sdl.1, filename.to_str().unwrap());
     let mut sk_surface = interface.create_surface();
     let mut window_manager = WindowManager::new();
     let mut egui_manager = EguiManager::new(&mut interface);
@@ -401,21 +415,29 @@ fn main() {
                     interface.mouse_info = mouse_info;
                 }
 
-                Event::MouseWheel { x, y, .. } => {
+                Event::MouseWheel {
+                    x, y, direction, ..
+                } => {
+                    let (horizontal, vertical) = wheel_steps(x, y, direction);
                     editor.dispatch_editor_event(
                         &mut interface,
                         EditorEvent::ScrollEvent {
-                            horizontal: x,
-                            vertical: y,
+                            horizontal,
+                            vertical,
                         },
                     );
                 }
 
+                // A .glif dragged onto the window (or, on macOS, onto the Dock icon, or opened
+                // from Finder while nglif is already running).
+                Event::DropFile { filename, .. } => {
+                    editor.open_dropped_glif(&mut interface, PathBuf::from(filename));
+                }
+
                 Event::Window { win_event, .. } => match win_event {
-                    WindowEvent::SizeChanged(x, y) | WindowEvent::Resized(x, y) => {
-                        interface.viewport.winsize = (x as f32, y as f32);
+                    WindowEvent::SizeChanged(..) | WindowEvent::Resized(..) => {
                         interface.viewport.set_broken_flag();
-                        interface.adjust_viewport_by_os_dpi();
+                        interface.refresh_window_metrics();
                         sk_surface = interface.create_surface();
                     }
                     _ => {}
@@ -431,5 +453,39 @@ fn main() {
             &mut egui_manager,
             &mut sk_surface,
         );
+    }
+}
+
+/// Every tool takes one unit of wheel motion as one zoom (or shape-edit) step, as a mouse
+/// wheel notch gives on Linux. A Mac trackpad instead reports two-finger scrolling in points,
+/// often dozens per event, and under "natural scrolling" (the macOS default) with the sign
+/// reversed. So on macOS, keep the physical direction and take at most one step per event.
+fn wheel_steps(x: i32, y: i32, direction: MouseWheelDirection) -> (i32, i32) {
+    if cfg!(target_os = "macos") {
+        let sign = if direction == MouseWheelDirection::Flipped {
+            -1
+        } else {
+            1
+        };
+        ((x * sign).signum(), (y * sign).signum())
+    } else {
+        (x, y)
+    }
+}
+
+#[test]
+fn wheel_steps_per_platform() {
+    use MouseWheelDirection::{Flipped, Normal};
+    if cfg!(target_os = "macos") {
+        // A fast two-finger swipe: one zoom step, not forty.
+        assert_eq!(wheel_steps(0, 40, Normal), (0, 1));
+        assert_eq!(wheel_steps(0, -40, Normal), (0, -1));
+        // Natural scrolling reports a swipe up as negative y; it should still zoom in.
+        assert_eq!(wheel_steps(0, -40, Flipped), (0, 1));
+        assert_eq!(wheel_steps(3, 0, Flipped), (-1, 0));
+        assert_eq!(wheel_steps(0, 0, Normal), (0, 0));
+    } else {
+        assert_eq!(wheel_steps(0, 3, Normal), (0, 3));
+        assert_eq!(wheel_steps(-2, 0, Flipped), (-2, 0));
     }
 }

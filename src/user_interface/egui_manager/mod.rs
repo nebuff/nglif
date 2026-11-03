@@ -15,11 +15,18 @@ pub struct EguiManager {
 
 impl EguiManager {
     pub fn new(interface: &mut Interface) -> Self {
-        let dpi = 1.0 / interface.set_dpi_from_os();
+        let dpi_mode = if cfg!(target_os = "macos") {
+            // Auto re-reads drawable size ÷ window size on every resize, so the UI keeps its
+            // size when the window moves between Retina and standard displays. A fixed Custom
+            // value would leave it twice too big or too small on the other screen.
+            DpiMode::Auto
+        } else {
+            DpiMode::Custom(1.0 / interface.set_dpi_from_os())
+        };
         let egui_sdl2 = egui_sdl2_event::EguiSDL2State::new(
             &interface.sdl_window,
             &interface.sdl_context.video().unwrap(),
-            DpiMode::Custom(dpi),
+            dpi_mode,
         );
         let egui_skia = egui_skia::EguiSkia::new();
         return EguiManager {
